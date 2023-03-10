@@ -520,20 +520,23 @@ func init() {
 			monitorCmd.Flags().BoolVar(&conf.ProvOpensvcUseCollectorAPI, "opensvc-use-collector-api", false, "Use the collector API instead of cluster VIP")
 			monitorCmd.Flags().StringVar(&conf.KubeConfig, "kube-config", "", "path to ks8 config file")
 
-			dbConfig := viper.New()
-			dbConfig.SetConfigType("yaml")
-			file, err := ioutil.ReadFile(conf.ConfDir + "/account.yaml")
-			if err != nil {
-				file, err = ioutil.ReadFile(conf.ShareDir + "/opensvc/account.yaml")
+			if conf.ProvOpensvcUseCollectorAPI {
+				dbConfig := viper.New()
+				dbConfig.SetConfigType("yaml")
+				file, err := ioutil.ReadFile(conf.ConfDir + "/account.yaml")
 				if err != nil {
-					log.Errorf("%s", err)
+					file, err = ioutil.ReadFile(conf.ShareDir + "/opensvc/account.yaml")
+					if err != nil {
+						log.Errorf("%s", err)
+					}
 				}
+				dbConfig.ReadConfig(bytes.NewBuffer(file))
+				log.Printf("OpenSVC user account: %s", dbConfig.Get("email").(string))
+				conf.ProvUser = dbConfig.Get("email").(string) + ":" + dbConfig.Get("hashed_password").(string)
+				crcTable := crc64.MakeTable(crc64.ECMA)
+				conf.ProvCodeApp = "ns" + strconv.FormatUint(crc64.Checksum([]byte(dbConfig.Get("email").(string)), crcTable), 10)
 			}
-			dbConfig.ReadConfig(bytes.NewBuffer(file))
-			//	log.Printf("OpenSVC user account: %s", dbConfig.Get("email").(string))
-			conf.ProvUser = dbConfig.Get("email").(string) + ":" + dbConfig.Get("hashed_password").(string)
-			crcTable := crc64.MakeTable(crc64.ECMA)
-			conf.ProvCodeApp = "ns" + strconv.FormatUint(crc64.Checksum([]byte(dbConfig.Get("email").(string)), crcTable), 10)
+
 			//	log.Printf("OpenSVC code application: %s", conf.ProvCodeApp)
 			//	} else {
 			//		monitorCmd.Flags().StringVar(&conf.ProvUser, "opensvc-user", "replication-manager@localhost.localdomain:mariadb", "OpenSVC collector provisioning user")
