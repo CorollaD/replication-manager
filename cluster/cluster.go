@@ -30,8 +30,7 @@ import (
 	"github.com/signal18/replication-manager/utils/s18log"
 	"github.com/signal18/replication-manager/utils/state"
 	log "github.com/sirupsen/logrus"
-	logsqlerr "github.com/sirupsen/logrus"
-	logsqlgen "github.com/sirupsen/logrus"
+	logsql "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -171,6 +170,11 @@ type Cluster struct {
 	WaitingFailover               int                         `json:"waitingFailover"`
 	Configurator                  configurator.Configurator   `json:"configurator"`
 	DiffVariables                 []VariableDiff              `json:"diffVariables"`
+	inInitNodes                   bool                        `json:"-"`
+	CanInitNodes                  bool                        `json:"canInitNodes"`
+	errorInitNodes                error                       `json:"-"`
+	SqlErrorLog                   *logsql.Logger              `json:"-"`
+	SqlGeneralLog                 *logsql.Logger              `json:"-"`
 	sync.Mutex
 	crcTable *crc64.Table
 }
@@ -251,7 +255,8 @@ const (
 
 // Init initial cluster definition
 func (cluster *Cluster) Init(conf config.Config, cfgGroup string, tlog *s18log.TermLog, log *s18log.HttpLog, termlength int, runUUID string, repmgrVersion string, repmgrHostname string, key []byte) error {
-
+	cluster.SqlErrorLog = logsql.New()
+	cluster.SqlGeneralLog = logsql.New()
 	cluster.crcTable = crc64.MakeTable(crc64.ECMA) // http://golang.org/pkg/hash/crc64/#pkg-constants
 	cluster.switchoverChan = make(chan bool)
 	// should use buffered channels or it will block
@@ -263,6 +268,7 @@ func (cluster *Cluster) Init(conf config.Config, cfgGroup string, tlog *s18log.T
 	cluster.addtableCond = nbc.New()
 	cluster.altertableCond = nbc.New()
 	cluster.canFlashBack = true
+	cluster.CanInitNodes = true
 	cluster.runOnceAfterTopology = true
 	cluster.testStopCluster = true
 	cluster.testStartCluster = true
@@ -309,34 +315,34 @@ func (cluster *Cluster) Init(conf config.Config, cfgGroup string, tlog *s18log.T
 		MaxSize:    cluster.Conf.LogRotateMaxSize,
 		MaxBackups: cluster.Conf.LogRotateMaxBackup,
 		MaxAge:     cluster.Conf.LogRotateMaxAge,
-		Level:      logsqlerr.DebugLevel,
-		Formatter: &logsqlerr.TextFormatter{
+		Level:      logsql.DebugLevel,
+		Formatter: &logsql.TextFormatter{
 			DisableColors:   true,
 			TimestampFormat: "2006-01-02 15:04:05",
 			FullTimestamp:   true,
 		},
 	})
 	if err != nil {
-		logsqlerr.WithError(err).Error("Can't init error sql log file")
+		cluster.SqlErrorLog.WithError(err).Error("Can't init error sql log file")
 	}
-	logsqlerr.AddHook(hookerr)
+	cluster.SqlErrorLog.AddHook(hookerr)
 
 	hookgen, err := s18log.NewRotateFileHook(s18log.RotateFileConfig{
 		Filename:   cluster.WorkingDir + "/sql_general.log",
 		MaxSize:    cluster.Conf.LogRotateMaxSize,
 		MaxBackups: cluster.Conf.LogRotateMaxBackup,
 		MaxAge:     cluster.Conf.LogRotateMaxAge,
-		Level:      logsqlerr.DebugLevel,
-		Formatter: &logsqlgen.TextFormatter{
+		Level:      logsql.DebugLevel,
+		Formatter: &logsql.TextFormatter{
 			DisableColors:   true,
 			TimestampFormat: "2006-01-02 15:04:05",
 			FullTimestamp:   true,
 		},
 	})
 	if err != nil {
-		logsqlgen.WithError(err).Error("Can't init general sql log file")
+		cluster.SqlGeneralLog.WithError(err).Error("Can't init general sql log file")
 	}
-	logsqlgen.AddHook(hookgen)
+	cluster.SqlGeneralLog.AddHook(hookgen)
 	cluster.LoadAPIUsers()
 	// createKeys do nothing yet
 	cluster.createKeys()
@@ -359,18 +365,25 @@ func (cluster *Cluster) Init(conf config.Config, cfgGroup string, tlog *s18log.T
 
 	return nil
 }
-func (cluster *Cluster) initOrchetratorNodes() {
 
+func (cluster *Cluster) initOrchetratorNodes() {
+	if cluster.inInitNodes {
+		return
+	}
+	cluster.inInitNodes = true
+	defer func() { cluster.inInitNodes = false }()
+
+	//defer cluster.insideInitNodes = false
 	//cluster.LogPrintf(LvlInfo, "Loading nodes from orchestrator %s", cluster.Conf.ProvOrchestrator)
 	switch cluster.GetOrchestrator() {
 	case config.ConstOrchestratorOpenSVC:
-		cluster.Agents, _ = cluster.OpenSVCGetNodes()
+		cluster.Agents, cluster.errorInitNodes = cluster.OpenSVCGetNodes()
 	case config.ConstOrchestratorKubernetes:
-		cluster.Agents, _ = cluster.K8SGetNodes()
+		cluster.Agents, cluster.errorInitNodes = cluster.K8SGetNodes()
 	case config.ConstOrchestratorSlapOS:
-		cluster.Agents, _ = cluster.SlapOSGetNodes()
+		cluster.Agents, cluster.errorInitNodes = cluster.SlapOSGetNodes()
 	case config.ConstOrchestratorLocalhost:
-		cluster.Agents, _ = cluster.LocalhostGetNodes()
+		cluster.Agents, cluster.errorInitNodes = cluster.LocalhostGetNodes()
 	case config.ConstOrchestratorOnPremise:
 	default:
 		log.Fatalln("prov-orchestrator not supported", cluster.Conf.ProvOrchestrator)
@@ -444,7 +457,7 @@ func (cluster *Cluster) Run() {
 					if !cluster.IsInFailover() {
 						cluster.initProxies()
 					}
-					cluster.initOrchetratorNodes()
+					go cluster.initOrchetratorNodes()
 					cluster.ResticFetchRepo()
 					cluster.runOnceAfterTopology = false
 				} else {
@@ -461,7 +474,7 @@ func (cluster *Cluster) Run() {
 						cluster.InjectProxiesTraffic()
 					}
 					if cluster.sme.GetHeartbeats()%30 == 0 {
-						cluster.initOrchetratorNodes()
+						go cluster.initOrchetratorNodes()
 						cluster.MonitorQueryRules()
 						cluster.MonitorVariablesDiff()
 						cluster.ResticFetchRepo()
@@ -471,9 +484,12 @@ func (cluster *Cluster) Run() {
 						cluster.sme.PreserveState("WARN0093")
 						cluster.sme.PreserveState("WARN0084")
 						cluster.sme.PreserveState("WARN0095")
-						cluster.sme.PreserveState("ERR00082")
 						cluster.sme.PreserveState("WARN0101")
 					}
+					if !cluster.CanInitNodes {
+						cluster.SetState("ERR00082", state.State{ErrType: "WARNING", ErrDesc: fmt.Sprintf(clusterError["ERR00082"], cluster.errorInitNodes), ErrFrom: "OPENSVC"})
+					}
+
 					if cluster.sme.GetHeartbeats()%36000 == 0 {
 						cluster.ResticPurgeRepo()
 					} else {
@@ -561,8 +577,13 @@ func (cluster *Cluster) StateProcessing() {
 			}
 			//		cluster.statecloseChan <- s
 		}
+		var states []string
+		if cluster.runOnceAfterTopology {
+			states = cluster.sme.GetFirstStates()
 
-		states := cluster.sme.GetStates()
+		} else {
+			states = cluster.sme.GetStates()
+		}
 		for i := range states {
 			cluster.LogPrintf("STATE", states[i])
 		}
@@ -573,7 +594,9 @@ func (cluster *Cluster) StateProcessing() {
 		}
 
 		for _, s := range cluster.sme.GetLastOpenedStates() {
+
 			cluster.CheckAlert(s)
+
 		}
 
 		cluster.sme.ClearState()

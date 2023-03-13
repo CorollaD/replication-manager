@@ -8,15 +8,15 @@ require (
 	github.com/Azure/azure-pipeline-go v0.2.2
 	github.com/Azure/azure-sdk-for-go v44.0.0+incompatible
 	github.com/Azure/azure-storage-blob-go v0.8.0
-	github.com/Azure/go-autorest/autorest v0.11.0
-	github.com/Azure/go-autorest/autorest/adal v0.9.0
+	github.com/Azure/go-autorest/autorest v0.11.1
+	github.com/Azure/go-autorest/autorest/adal v0.9.5
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.0
 	github.com/Azure/go-autorest/autorest/azure/cli v0.4.0
 	github.com/BurntSushi/toml v0.3.1
 	github.com/JaderDias/movingmedian v0.0.0-20170611140316-de8c410559fa
 	github.com/NYTimes/gziphandler v1.0.1
 	github.com/alyu/configparser v0.0.0-20151125021232-26b2fe18bee1
-	github.com/asaskevich/govalidator v0.0.0-20180115102450-4b3d68f87f17
+	github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a
 	github.com/aws/aws-sdk-go v1.34.0
 	github.com/bluele/logrus_slack v0.0.0-20170812021752-74aa3c9b7cc3
 	github.com/bradfitz/gomemcache v0.0.0-20170208213004-1952afaa557d
@@ -79,8 +79,8 @@ require (
 	github.com/wangjohn/quickselect v0.0.0-20161129230411-ed8402a42d5f
 	github.com/xwb1989/sqlparser v0.0.0-20171128062118-da747e0c62c4
 	github.com/yoheimuta/protolint v0.32.0
-	golang.org/x/crypto v0.0.0-20210513164829-c07d793c2f9a
-	golang.org/x/net v0.0.0-20211105192438-b53810dc28af
+	golang.org/x/crypto v0.1.0
+	golang.org/x/net v0.7.0
 	google.golang.org/genproto v0.0.0-20210617175327-b9e0b3197ced
 	google.golang.org/grpc v1.38.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.1.0
@@ -88,9 +88,9 @@ require (
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
 	gopkg.in/ini.v1 v1.55.0
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
-	k8s.io/api v0.18.2
-	k8s.io/apimachinery v0.18.2
-	k8s.io/client-go v0.18.2
+	k8s.io/api v0.20.0
+	k8s.io/apimachinery v0.20.0
+	k8s.io/client-go v0.20.0
 )
 
 require (
@@ -115,7 +115,6 @@ require (
 	github.com/gonum/floats v0.0.0-20180125090339-7de1f4ea7ab5 // indirect
 	github.com/gonum/internal v0.0.0-20180125090855-fda53f8d2571 // indirect
 	github.com/gonum/lapack v0.0.0-20180125091020-f0b8b25edece // indirect
-	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gorilla/context v1.1.1 // indirect
 	github.com/gorilla/securecookie v1.1.1 // indirect
 	github.com/gorilla/sessions v0.0.0-20180209192218-6ba88b7f1c1e // indirect
@@ -130,7 +129,6 @@ require (
 	github.com/rs/cors v1.7.0 // indirect
 	github.com/siddontang/go-log v0.0.0-20190221022429-1e957dd83bed // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
-	golang.org/x/tools v0.1.7 // indirect
 	google.golang.org/grpc/examples v0.0.0-20220316190256-c4cabf78f4a2 // indirect
 	nhooyr.io/websocket v1.8.7 // indirect
 )
